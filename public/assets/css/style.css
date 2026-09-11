@@ -317,15 +317,24 @@ textarea { min-height: 120px; resize: vertical; line-height: 1.6; }
 /* ============ 空态 ============ */
 .empty { text-align: center; color: var(--c-text-3); padding: 48px 0; font-size: 13.5px; }
 
-/* ============ 提示条 ============ */
+/* ============ 提示条（左侧色条 + fade-in，班务平台规范） ============ */
 .notice {
   padding: var(--space-3) var(--space-4);
   border-radius: var(--radius-s);
   border-left: 3px solid var(--c-accent);
   background: var(--c-accent-weak);
-  font-size: 13px;
-  margin-bottom: var(--space-4);
+  font-size: 13.5px;
+  margin: var(--space-3) 0;
+  line-height: 1.6;
+  animation: fade-in var(--dur-3) var(--ease-out);
 }
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(-2px); }
+  to { opacity: 1; transform: none; }
+}
+.notice-info { border-left-color: var(--c-accent); background: var(--c-accent-weak); }
+.notice-warn { border-left-color: var(--c-warn); background: var(--c-warn-weak); }
+.notice-danger { border-left-color: var(--c-danger); background: var(--c-danger-weak); }
 
 @media (max-width: 640px) {
   .container { padding: var(--space-4) var(--space-3) 60px; }

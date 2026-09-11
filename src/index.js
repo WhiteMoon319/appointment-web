@@ -57,12 +57,25 @@ export default {
           return json({ ok: true, data: stats });
         }
 
-        // OneBot 联调：查看连接状态 / 发测试消息
+        // OneBot 联调：通用调用（查看连接状态 / 调任意 action / 发测试消息）
         if (path === '/api/onebot/status' && method === 'GET') {
           const id = env.ONEBOT_BRIDGE.idFromName('onebot');
           const stub = env.ONEBOT_BRIDGE.get(id);
           const st = await stub.fetch(new Request('http://onebot/status')).then(r => r.json());
           return json({ ok: true, data: st });
+        }
+        if (path === '/api/onebot/call' && method === 'POST') {
+          // { action, params } 透传给 OneBot（联调/调试用）
+          const body = await request.json().catch(() => ({}));
+          if (!body.action) return json({ error: '缺少 action' }, 400);
+          const id = env.ONEBOT_BRIDGE.idFromName('onebot');
+          const stub = env.ONEBOT_BRIDGE.get(id);
+          const r = await stub.fetch(new Request('http://onebot/send', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: body.action, params: body.params || {} })
+          })).then(r => r.json());
+          return json({ ok: !!r.ok, data: r });
         }
         if (path === '/api/onebot/test' && method === 'POST') {
           const body = await request.json().catch(() => ({}));
