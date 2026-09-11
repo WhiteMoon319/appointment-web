@@ -1,0 +1,123 @@
+:root {
+  --primary: #3B6FD4;
+  --primary-dark: #2f5ab0;
+  --danger: #e04b4b;
+  --warn: #e6872e;
+  --success: #2e9e44;
+  --bg: #f5f6f8;
+  --card: #ffffff;
+  --text: #222;
+  --muted: #999;
+  --border: #eef0f3;
+  --radius: 12px;
+  --shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+    "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.6;
+  font-size: 15px;
+}
+
+.container { max-width: 640px; margin: 0 auto; padding: 20px 16px 40px; }
+
+.card {
+  background: var(--card);
+  border-radius: var(--radius);
+  padding: 20px;
+  margin-bottom: 16px;
+  box-shadow: var(--shadow);
+}
+
+h1 { font-size: 1.4rem; margin-bottom: 4px; }
+h2 { font-size: 1.05rem; margin-bottom: 12px; }
+.sub { color: var(--muted); font-size: 13px; margin-bottom: 20px; }
+
+label { display: block; font-size: 13px; color: #444; margin: 12px 0 6px; }
+
+input, textarea, select {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 15px;
+  background: #fafbfc;
+  outline: none;
+  transition: border-color 0.15s;
+}
+input:focus, textarea:focus { border-color: var(--primary); background: #fff; }
+textarea { resize: vertical; min-height: 100px; font-family: inherit; }
+
+button {
+  display: block;
+  width: 100%;
+  padding: 11px;
+  border: none;
+  border-radius: 8px;
+  font-size: 15px;
+  cursor: pointer;
+  transition: background 0.15s, opacity 0.15s;
+}
+button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.btn-primary { background: var(--primary); color: #fff; margin-top: 18px; }
+.btn-primary:hover { background: var(--primary-dark); }
+.btn-danger { background: #fff; color: var(--danger); border: 1px solid var(--danger); margin-top: 8px; }
+.btn-plain { background: #fff; color: var(--primary); border: 1px solid var(--primary); margin-top: 8px; }
+.btn-sm { display: inline-block; width: auto; padding: 6px 14px; font-size: 13px; margin: 0 8px 0 0; }
+
+.row { display: flex; align-items: center; gap: 8px; }
+.row-between { display: flex; align-items: center; justify-content: space-between; }
+
+.muted { color: var(--muted); font-size: 13px; }
+
+.tag { display: inline-block; padding: 2px 10px; border-radius: 6px; font-size: 12px; }
+.tag-pending { background: #fff3e0; color: var(--warn); }
+.tag-confirmed { background: #e8f5e9; color: var(--success); }
+.tag-rejected { background: #ffebee; color: var(--danger); }
+.tag-cancelled { background: #f0f0f0; color: #888; }
+.tag-adjust { background: #e3f2fd; color: var(--primary); }
+.tag-completed { background: #eceff1; color: #607d8b; }
+
+.status-map {
+  pending: 待确认; confirmed: 已确认; rejected: 已拒绝;
+  cancelled: 已取消; adjust_pending: 待学生确认调整; completed: 已完成;
+}
+
+.appt-time { font-size: 1.1rem; font-weight: 600; }
+.appt-meta { margin-top: 6px; color: #555; font-size: 14px; }
+.note { margin-top: 8px; font-size: 13px; }
+.note-warn { color: var(--warn); }
+.note-danger { color: var(--danger); }
+
+.btn-row { margin-top: 14px; }
+
+.tab-row { display: flex; background: #f0f2f5; border-radius: 8px; padding: 4px; margin-bottom: 16px; }
+.tab { flex: 1; text-align: center; padding: 9px 0; font-size: 14px; color: #666; border-radius: 6px; cursor: pointer; }
+.tab.active { background: #fff; color: var(--primary); font-weight: 600; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+
+.empty { text-align: center; color: var(--muted); padding: 40px 0; }
+
+.entry { display: block; padding: 12px 0; color: var(--primary); border-bottom: 1px solid var(--border); text-decoration: none; font-size: 15px; }
+.entry:last-child { border-bottom: none; }
+
+.topbar { display: flex; justify-content: space-between; align-items: center; padding: 14px 16px; background: var(--card); border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 10; }
+.topbar .app-name { font-weight: 700; color: var(--primary); }
+.topbar a { color: var(--muted); font-size: 13px; text-decoration: none; }
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #17181a; --card: #1f2024; --text: #e6e6e6; --muted: #888;
+    --border: #2c2e33;
+  }
+  input, textarea { background: #26282d; color: #e6e6e6; border-color: #33353b; }
+  input:focus { background: #2a2c32; }
+  .tab-row { background: #26282d; }
+  .tab.active { background: #33353b; color: #7fa4e8; }
+  .btn-danger, .btn-plain { background: transparent; }
+}

@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>学生端 - 师生预约</title>
+  <link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+  <div class="topbar">
+    <span class="app-name">学生端</span>
+    <a href="#" id="logout">退出登录</a>
+  </div>
+
+  <div class="container">
+    <!-- 预约 -->
+    <div class="card" id="bookCard">
+      <h2>预约老师</h2>
+      <label>选择老师</label>
+      <select id="teacherSelect"></select>
+      <label>预约日期</label>
+      <input id="bookDate" type="date">
+      <label>预约时间</label>
+      <input id="bookTime" type="time">
+      <button class="btn-primary" id="btnBook">提交预约</button>
+      <p class="muted" style="margin-top:10px">提交后需老师确认；老师调整时间后你需再次确认。预约确认后到点会通过 QQ 通知提醒。</p>
+    </div>
+
+    <!-- 我的预约 -->
+    <div class="card">
+      <div class="row-between">
+        <h2 style="margin:0">我的预约</h2>
+        <button class="btn-sm btn-plain" id="btnRefresh" style="margin:0">刷新</button>
+      </div>
+      <div class="tab-row" id="statusTabs" style="margin-top:12px">
+        <div class="tab active" data-s="">全部</div>
+        <div class="tab" data-s="pending">待确认</div>
+        <div class="tab" data-s="confirmed">已确认</div>
+        <div class="tab" data-s="adjust_pending">待确认调整</div>
+      </div>
+      <div id="myList"></div>
+    </div>
+
+    <!-- 设置 -->
+    <div class="card">
+      <h2>提醒设置</h2>
+      <label>提前多久提醒</label>
+      <select id="remindSelect">
+        <option value="0">不提醒</option>
+        <option value="5">提前 5 分钟</option>
+        <option value="10">提前 10 分钟</option>
+        <option value="30">提前 30 分钟</option>
+        <option value="60">提前 1 小时</option>
+        <option value="1440">提前 1 天</option>
+      </select>
+      <button class="btn-primary" id="btnSaveRemind">保存设置</button>
+    </div>
+  </div>
+
+  <script src="/assets/js/api.js"></script>
+  <script>
+    const $ = id => document.getElementById(id);
+    const STATUS = {
+      pending: ['待确认', 'tag-pending'], confirmed: ['已确认', 'tag-confirmed'],
+      rejected: ['已拒绝', 'tag-rejected'], cancelled: ['已取消', 'tag-cancelled'],
+      adjust_pending: ['待学生确认调整', 'tag-adjust'], completed: ['已完成', 'tag-completed']
+    };
+    const fmt = ts => {
+      const d = new Date(ts);
+      const p = n => (n < 10 ? '0' + n : '' + n);
+      return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+    };
+    let filterStatus = '';
+
+    async function loadTeachers() {
+      const data = await API.get('/api/teachers');
+      const sel = $('teacherSelect');
+      sel.innerHTML = data.list.map(t => `<option value="${t.id}">${t.name}</option>`).join('');
+    }
+
+    async function loadMine() {
+      const q = filterStatus ? `?status=${filterStatus}` : '';
+      const data = await API.get('/api/appointments' + q);
+      const list = data.list || [];
+      if (!list.length) {
+        $('myList').innerHTML = '<div class="empty">暂无相关预约</div>';
+        return;
+      }
+      $('myList').innerHTML = list.map(a => {
+        const [text, cls] = STATUS[a.status] || [a.status, 'tag-cancelled'];
+        return `<div class="card" style="margin-bottom:12px">
+          <div class="row-between">
+            <span class="appt-time">${fmt(a.start_time)}</span>
+            <span class="tag ${cls}">${text}</span>
+          </div>
+          <div class="appt-meta">老师：${a.teacher_name}</div>
+          ${a.teacher_adjusted ? '<div class="note note-warn">老师调整了时间，请确认</div>' : ''}
+          ${a.reject_reason ? `<div class="note note-danger">拒绝原因：${a.reject_reason}</div>` : ''}
+          ${a.status === 'pending' || a.status === 'confirmed' ? `
+            <div class="btn-row">
+              <button class="btn-sm btn-danger" onclick="cancelAppt(${a.id})">取消预约</button>
+            </div>` : ''}
+          ${a.status === 'adjust_pending' ? `
+            <div class="btn-row">
+              <button class="btn-sm btn-primary" onclick="agreeAdjust(${a.id})">同意新时间</button>
+              <button class="btn-sm btn-danger" onclick="rejectAdjust(${a.id})">不同意，取消</button>
+            </div>` : ''}
+        </div>`;
+      }).join('');
+    }
+
+    window.cancelAppt = async (id) => {
+      if (!confirm('确定取消这次预约吗？')) return;
+      try {
+        await API.post('/api/appointments', { action: 'cancel', appointmentId: id });
+        alert('已取消'); loadMine();
+      } catch (e) { alert(e.message); }
+    };
+    window.agreeAdjust = async (id) => {
+      try {
+        await API.post('/api/appointments', { action: 'studentConfirmAdjust', appointmentId: id, agree: true });
+        alert('已同意'); loadMine();
+      } catch (e) { alert(e.message); }
+    };
+    window.rejectAdjust = async (id) => {
+      if (!confirm('不同意新时间将取消本次预约，确定吗？')) return;
+      try {
+        await API.post('/api/appointments', { action: 'studentConfirmAdjust', appointmentId: id, agree: false });
+        alert('已取消'); loadMine();
+      } catch (e) { alert(e.message); }
+    };
+
+    $('btnBook').addEventListener('click', async () => {
+      const teacherId = $('teacherSelect').value;
+      const date = $('bookDate').value;
+      const time = $('bookTime').value;
+      if (!teacherId) { alert('请选择老师'); return; }
+      if (!date || !time) { alert('请选择日期和时间'); return; }
+      const startTime = new Date(`${date}T${time}:00`).getTime();
+      if (startTime <= Date.now()) { alert('预约时间必须晚于当前时间'); return; }
+      try {
+        await API.post('/api/appointments', { action: 'create', teacherId: Number(teacherId), startTime });
+        alert('预约已提交，等待老师确认');
+        $('bookDate').value = ''; $('bookTime').value = '';
+        loadMine();
+      } catch (e) { alert(e.message); }
+    });
+
+    document.querySelectorAll('#statusTabs .tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('#statusTabs .tab').forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        filterStatus = tab.dataset.s;
+        loadMine();
+      });
+    });
+
+    $('btnRefresh').addEventListener('click', () => { loadTeachers(); loadMine(); });
+
+    // 设置
+    $('btnSaveRemind').addEventListener('click', async () => {
+      try {
+        await API.post('/api/settings', { remindMinutes: Number($('remindSelect').value) });
+        alert('已保存');
+      } catch (e) { alert(e.message); }
+    });
+
+    $('logout').addEventListener('click', async e => {
+      e.preventDefault();
+      try { await API.post('/api/auth/logout'); } catch (err) { /* ignore */ }
+      API.setSession(null);
+      window.location.href = '/';
+    });
+
+    // 初始化
+    (async () => {
+      try {
+        const me = await API.get('/api/auth/me');
+        if (!me || me.role !== 'student') { window.location.href = '/'; return; }
+        $('remindSelect').value = String(me.remindMinutes);
+        await loadTeachers();
+        await loadMine();
+      } catch (e) {
+        window.location.href = '/';
+      }
+    })();
+  </script>
+</body>
+</html>

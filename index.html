@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>登录 - 师生预约</title>
+  <link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+  <div class="container">
+    <div class="card">
+      <h1>师生预约</h1>
+      <p class="sub">学生实名预约老师时间，到点 QQ 通知提醒</p>
+
+      <div class="tab-row" id="roleTabs">
+        <div class="tab active" data-role="student">我是学生</div>
+        <div class="tab" data-role="teacher">我是老师</div>
+      </div>
+
+      <!-- 登录表单 -->
+      <div id="loginForm">
+        <label>QQ 号</label>
+        <input id="loginQQ" type="text" placeholder="请输入 QQ 号" autocomplete="username">
+        <label>密码</label>
+        <input id="loginPwd" type="password" placeholder="请输入密码" autocomplete="current-password">
+        <button class="btn-primary" id="btnLogin">登录</button>
+        <p class="muted" style="margin-top:12px;text-align:center">
+          还没有账号？<a href="#" id="showRegister" style="color:var(--primary)">去注册</a>
+        </p>
+      </div>
+
+      <!-- 注册表单 -->
+      <div id="registerForm" style="display:none">
+        <label>QQ 号</label>
+        <input id="regQQ" type="text" placeholder="用于接收 QQ 通知">
+        <label id="regLabelStudent">学号</label>
+        <input id="regStudentId" type="text" placeholder="学号（须在老师导入的名单中）">
+        <label>姓名</label>
+        <input id="regName" type="text" placeholder="请输入姓名">
+        <div id="regTeacherBlock" style="display:none">
+          <label>老师邀请码</label>
+          <input id="regInvite" type="text" placeholder="请输入老师邀请码">
+        </div>
+        <label>密码</label>
+        <input id="regPwd" type="password" placeholder="至少 6 位">
+        <button class="btn-primary" id="btnRegister">注册</button>
+        <p class="muted" style="margin-top:12px;text-align:center">
+          已有账号？<a href="#" id="showLogin" style="color:var(--primary)">去登录</a>
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <script src="/assets/js/api.js"></script>
+  <script>
+    let role = 'student';
+    const $ = id => document.getElementById(id);
+
+    // 角色切换
+    document.querySelectorAll('#roleTabs .tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('#roleTabs .tab').forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        role = tab.dataset.role;
+        $('regLabelStudent').textContent = role === 'student' ? '学号' : '老师姓名';
+        $('regTeacherBlock').style.display = role === 'teacher' ? '' : 'none';
+        $('regStudentId').style.display = role === 'student' ? '' : 'none';
+        $('regLabelStudent').style.display = role === 'student' ? '' : 'none';
+      });
+    });
+
+    // 登录/注册切换
+    $('showRegister').addEventListener('click', e => {
+      e.preventDefault();
+      $('loginForm').style.display = 'none';
+      $('registerForm').style.display = '';
+    });
+    $('showLogin').addEventListener('click', e => {
+      e.preventDefault();
+      $('registerForm').style.display = 'none';
+      $('loginForm').style.display = '';
+    });
+
+    // 登录
+    $('btnLogin').addEventListener('click', async () => {
+      const qq = $('loginQQ').value.trim();
+      const password = $('loginPwd').value;
+      if (!qq || !password) { alert('请填写 QQ 号和密码'); return; }
+      try {
+        const data = await API.post('/api/auth/login', { qq, password });
+        API.setSession(data);
+        window.location.href = data.role === 'teacher' ? '/teacher.html' : '/student.html';
+      } catch (e) {
+        alert(e.message);
+      }
+    });
+
+    // 注册
+    $('btnRegister').addEventListener('click', async () => {
+      const qq = $('regQQ').value.trim();
+      const name = $('regName').value.trim();
+      const password = $('regPwd').value;
+      const body = { qq, name, password };
+      if (role === 'teacher') {
+        body.inviteCode = $('regInvite').value.trim();
+      } else {
+        body.studentId = $('regStudentId').value.trim();
+      }
+      if (!qq || !name || !password) { alert('请填写完整信息'); return; }
+      try {
+        const data = await API.post('/api/auth/register', body);
+        API.setSession(data);
+        window.location.href = data.role === 'teacher' ? '/teacher.html' : '/student.html';
+      } catch (e) {
+        alert(e.message);
+      }
+    });
+
+    // 已登录直接跳转
+    (async () => {
+      const u = API.user();
+      if (u) {
+        try {
+          const me = await API.get('/api/auth/me');
+          if (me) {
+            window.location.href = me.role === 'teacher' ? '/teacher.html' : '/student.html';
+          }
+        } catch (e) { /* token 失效则留在登录页 */ }
+      }
+    })();
+  </script>
+</body>
+</html>

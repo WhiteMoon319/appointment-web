@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>老师端 - 师生预约</title>
+  <link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+  <div class="topbar">
+    <span class="app-name">老师端</span>
+    <a href="#" id="logout">退出登录</a>
+  </div>
+
+  <div class="container">
+    <!-- 名单管理 -->
+    <div class="card">
+      <div class="row-between">
+        <h2 style="margin:0">名单管理</h2>
+        <button class="btn-sm btn-plain" id="btnRefreshRoster" style="margin:0">刷新</button>
+      </div>
+      <label>批量导入（每行：学号,姓名）</label>
+      <textarea id="rosterBatch" placeholder="20250001,张三&#10;20250002,李四"></textarea>
+      <button class="btn-primary" id="btnImport">导入名单</button>
+      <div id="rosterList" style="margin-top:14px"></div>
+    </div>
+
+    <!-- 预约管理 -->
+    <div class="card">
+      <div class="row-between">
+        <h2 style="margin:0">预约管理</h2>
+        <button class="btn-sm btn-plain" id="btnRefreshAppt" style="margin:0">刷新</button>
+      </div>
+      <div class="tab-row" id="statusTabs" style="margin-top:12px">
+        <div class="tab active" data-s="">全部</div>
+        <div class="tab" data-s="pending">待确认</div>
+        <div class="tab" data-s="confirmed">已确认</div>
+        <div class="tab" data-s="adjust_pending">调整中</div>
+      </div>
+      <div id="apptList"></div>
+    </div>
+
+    <!-- 设置 -->
+    <div class="card">
+      <h2>提醒设置</h2>
+      <label>提前多久提醒</label>
+      <select id="remindSelect">
+        <option value="0">不提醒</option>
+        <option value="5">提前 5 分钟</option>
+        <option value="10">提前 10 分钟</option>
+        <option value="30">提前 30 分钟</option>
+        <option value="60">提前 1 小时</option>
+        <option value="1440">提前 1 天</option>
+      </select>
+      <button class="btn-primary" id="btnSaveRemind">保存设置</button>
+    </div>
+  </div>
+
+  <script src="/assets/js/api.js"></script>
+  <script>
+    const $ = id => document.getElementById(id);
+    const STATUS = {
+      pending: ['待确认', 'tag-pending'], confirmed: ['已确认', 'tag-confirmed'],
+      rejected: ['已拒绝', 'tag-rejected'], cancelled: ['已取消', 'tag-cancelled'],
+      adjust_pending: ['待学生确认调整', 'tag-adjust'], completed: ['已完成', 'tag-completed']
+    };
+    const fmt = ts => {
+      const d = new Date(ts);
+      const p = n => (n < 10 ? '0' + n : '' + n);
+      return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+    };
+    let filterStatus = '';
+
+    async function loadRoster() {
+      try {
+        const data = await API.get('/api/roster/list');
+        const list = data.list || [];
+        $('rosterList').innerHTML = list.length
+          ? list.map(r => `<div class="appt-meta">${r.student_id}　${r.name}</div>`).join('')
+          : '<div class="empty">名单为空，请先导入</div>';
+      } catch (e) { $('rosterList').innerHTML = `<div class="note note-danger">${e.message}</div>`; }
+    }
+
+    async function loadAppointments() {
+      const q = filterStatus ? `?status=${filterStatus}` : '';
+      const data = await API.get('/api/appointments' + q);
+      const list = data.list || [];
+      if (!list.length) {
+        $('apptList').innerHTML = '<div class="empty">暂无相关预约</div>';
+        return;
+      }
+      $('apptList').innerHTML = list.map(a => {
+        const [text, cls] = STATUS[a.status] || [a.status, 'tag-cancelled'];
+        return `<div class="card" style="margin-bottom:12px">
+          <div class="row-between">
+            <span class="appt-time">${fmt(a.start_time)}</span>
+            <span class="tag ${cls}">${text}</span>
+          </div>
+          <div class="appt-meta">学生：${a.student_name}（${a.student_qq}）</div>
+          ${a.reject_reason ? `<div class="note note-danger">拒绝原因：${a.reject_reason}</div>` : ''}
+          ${a.teacher_adjusted ? '<div class="note note-warn">已调整时间，等待学生确认</div>' : ''}
+          ${a.status === 'pending' ? `
+            <div class="btn-row">
+              <button class="btn-sm btn-primary" onclick="confirmAppt(${a.id})">确认</button>
+              <button class="btn-sm btn-danger" onclick="rejectAppt(${a.id})">拒绝</button>
+            </div>` : ''}
+          ${a.status === 'confirmed' ? `
+            <div class="btn-row">
+              <button class="btn-sm btn-plain" onclick="adjustAppt(${a.id})">调整时间</button>
+            </div>` : ''}
+        </div>`;
+      }).join('');
+    }
+
+    window.confirmAppt = async (id) => {
+      try {
+        await API.post('/api/appointments', { action: 'confirm', appointmentId: id });
+        alert('已确认'); loadAppointments();
+      } catch (e) { alert(e.message); }
+    };
+    window.rejectAppt = async (id) => {
+      const reason = prompt('请输入拒绝原因（可留空）：');
+      if (reason === null) return;
+      try {
+        await API.post('/api/appointments', { action: 'reject', appointmentId: id, reason });
+        alert('已拒绝'); loadAppointments();
+      } catch (e) { alert(e.message); }
+    };
+    window.adjustAppt = async (id) => {
+      const date = prompt('新日期（YYYY-MM-DD）：');
+      if (!date) return;
+      const time = prompt('新时间（HH:MM）：');
+      if (!time) return;
+      const startTime = new Date(`${date}T${time}:00`).getTime();
+      if (startTime <= Date.now()) { alert('时间必须晚于当前时间'); return; }
+      try {
+        await API.post('/api/appointments', { action: 'adjust', appointmentId: id, startTime });
+        alert('已提交调整，等待学生确认'); loadAppointments();
+      } catch (e) { alert(e.message); }
+    };
+
+    $('btnImport').addEventListener('click', async () => {
+      const text = $('rosterBatch').value.trim();
+      if (!text) { alert('请粘贴名单内容'); return; }
+      const items = text.split(/\r?\n/).map(line => {
+        const cols = line.split(/[,，\t\s]+/).map(s => s.trim());
+        return cols.length >= 2 ? { studentId: cols[0], name: cols[1] } : null;
+      }).filter(Boolean);
+      if (!items.length) { alert('没有有效数据，格式：学号,姓名'); return; }
+      try {
+        const data = await API.post('/api/roster/import', { action: 'import', items });
+        alert(`成功导入 ${data.added} 条`);
+        $('rosterBatch').value = '';
+        loadRoster();
+      } catch (e) { alert(e.message); }
+    });
+
+    document.querySelectorAll('#statusTabs .tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('#statusTabs .tab').forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        filterStatus = tab.dataset.s;
+        loadAppointments();
+      });
+    });
+
+    $('btnRefreshRoster').addEventListener('click', loadRoster);
+    $('btnRefreshAppt').addEventListener('click', loadAppointments);
+
+    $('btnSaveRemind').addEventListener('click', async () => {
+      try {
+        await API.post('/api/settings', { remindMinutes: Number($('remindSelect').value) });
+        alert('已保存');
+      } catch (e) { alert(e.message); }
+    });
+
+    $('logout').addEventListener('click', async e => {
+      e.preventDefault();
+      try { await API.post('/api/auth/logout'); } catch (err) { /* ignore */ }
+      API.setSession(null);
+      window.location.href = '/';
+    });
+
+    // 初始化
+    (async () => {
+      try {
+        const me = await API.get('/api/auth/me');
+        if (!me || me.role !== 'teacher') { window.location.href = '/'; return; }
+        $('remindSelect').value = String(me.remindMinutes);
+        await loadRoster();
+        await loadAppointments();
+      } catch (e) {
+        window.location.href = '/';
+      }
+    })();
+  </script>
+</body>
+</html>
