@@ -65,7 +65,7 @@ export async function create(request, env, body) {
   // 通知老师：有新预约
   await sendNotify(env, {
     qq: teacher.qq,
-    content: `学生${student.name}：有新的待确认预约（${fmtTime(startTime)}），请到系统处理`
+    content: `${student.name}：有新的待确认预约（${fmtTime(startTime)}），请到系统处理`
   }, { appointmentId, type: 'result' });
 
   return json({ ok: true, data: { id: appointmentId, status: 'pending' } });
@@ -129,7 +129,7 @@ export async function stateChange(request, env, action, body = {}) {
       if (teacher) {
         await sendNotify(env, {
           qq: teacher.qq,
-          content: `学生${appt.student_name}：${agree ? '已同意调整后的时间' : '不同意调整，预约已取消'}`
+          content: `${appt.student_name}：${agree ? '已同意调整后的时间' : '不同意调整，预约已取消'}`
         }, { appointmentId: id, type: 'result' });
       }
       return json({ ok: true, data: { id, status: newStatus } });
@@ -142,7 +142,7 @@ export async function stateChange(request, env, action, body = {}) {
       if (teacher) {
         await sendNotify(env, {
           qq: teacher.qq,
-          content: `学生${appt.student_name}：预约已取消`
+          content: `${appt.student_name}：预约已取消`
         }, { appointmentId: id, type: 'result' });
       }
       return json({ ok: true, data: { id, status: 'cancelled' } });

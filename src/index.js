@@ -9,12 +9,22 @@ import * as appointments from './routes/appointments.js';
 import * as settings from './routes/settings.js';
 import { runRemind } from './routes/remind.js';
 import { json } from './lib/auth.js';
+import { OneBotBridge } from './onebot-bridge.js';
+
+export { OneBotBridge };
 
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
     const path = url.pathname;
     const method = request.method;
+
+    // ---- OneBot 反向 WS 连接入口：转发给 DO 持有连接 ----
+    if (path === '/ws') {
+      const id = env.ONEBOT_BRIDGE.idFromName('onebot');
+      const stub = env.ONEBOT_BRIDGE.get(id);
+      return stub.fetch(request);
+    }
 
     // ---- API 路由 ----
     if (path.startsWith('/api/')) {

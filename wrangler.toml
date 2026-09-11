@@ -14,6 +14,15 @@ binding = "DB"
 database_name = "appointment-db"
 database_id = "REPLACE_WITH_YOUR_D1_ID"
 
+# Durable Object：持有 OneBot 反向 WS 连接
+[[durable_objects.bindings]]
+name = "ONEBOT_BRIDGE"
+class_name = "OneBotBridge"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["OneBotBridge"]
+
 # 定时提醒：每分钟执行
 [triggers]
 crons = ["* * * * *"]
@@ -21,6 +30,5 @@ crons = ["* * * * *"]
 # 业务配置
 [vars]
 TEACHER_INVITE_CODE = "REPLACE_WITH_SECRET"
-NOTIFY_GROUP_ID = "REPLACE_WITH_QQ_GROUP_ID"
-ONEBOT_URL = "https://onebot.example.com"
-ONEBOT_TOKEN = "REPLACE_WITH_ONEBOT_TOKEN"
+NOTIFY_GROUP_ID = "123456789"
+ONEBOT_TOKEN = "LOCAL_DEV_TOKEN"

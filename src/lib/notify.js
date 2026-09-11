@@ -1,26 +1,28 @@
 /**
- * OneBot 通知模块
- * 策略：群临时会话（send_private_msg 带 group_id）优先，
- *       失败降级为群内 at（send_group_msg 带 [CQ:at,qq=xxx]），
- *       仍失败则记录 failed。
- * 环境变量：ONEBOT_URL / ONEBOT_TOKEN / NOTIFY_GROUP_ID
+ * OneBot 通知模块（反向 WS 版）
+ * 通过 OneBotBridge DO 向 OneBot 发 OneBot 11 API 调用：
+ *   1. send_private_msg 带 group_id -> 群临时会话私发（优先）
+ *   2. 失败降级 send_group_msg 带 [CQ:at,qq=xxx] -> 群内点名
+ *   3. 仍失败记录 failed
  */
 
+function bridgeStub(env) {
+  const id = env.ONEBOT_BRIDGE.idFromName('onebot');
+  return env.ONEBOT_BRIDGE.get(id);
+}
+
 async function onebotCall(env, action, params) {
-  const url = `${env.ONEBOT_URL}/${action}`;
-  const headers = { 'Content-Type': 'application/json' };
-  if (env.ONEBOT_TOKEN) headers['Authorization'] = `Bearer ${env.ONEBOT_TOKEN}`;
   try {
-    const res = await fetch(url, {
+    // 通过 DO 的 HTTP 端点调用（本地 miniflare 与线上 workerd 均稳定支持）
+    const r = await bridgeStub(env).fetch(new Request('http://onebot/send', {
       method: 'POST',
-      headers,
-      body: JSON.stringify(params)
-    });
-    const body = await res.json().catch(() => ({}));
-    // OneBot 11: { status: 'ok'|'failed', retcode, data, message }
-    return { httpOk: res.ok, code: Number(body.retcode ?? -1), message: body.message || '', body };
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action, params })
+    }));
+    const body = await r.json();
+    return { code: body.ok ? 0 : (body.code ?? -1), message: body.message || '' };
   } catch (e) {
-    return { httpOk: false, code: -999, message: String(e.message || e) };
+    return { code: -999, message: String(e.message || e) };
   }
 }
 
@@ -48,7 +50,7 @@ export async function sendNotify(env, inputs, record) {
     group_id: Number(groupId),
     message: inputs.content
   });
-  if (r1.code === 0 || r1.httpOk) {
+  if (r1.code === 0) {
     await logSend(env, record, qq, 'temporary', 'sent');
     return { channel: 'temporary', status: 'sent' };
   }
@@ -58,7 +60,7 @@ export async function sendNotify(env, inputs, record) {
     group_id: Number(groupId),
     message: `[CQ:at,qq=${qq}] ${inputs.content}`
   });
-  if (r2.code === 0 || r2.httpOk) {
+  if (r2.code === 0) {
     await logSend(env, record, qq, 'at', 'fallback');
     return { channel: 'at', status: 'fallback' };
   }
