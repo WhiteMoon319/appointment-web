@@ -57,6 +57,41 @@ export default {
           return json({ ok: true, data: stats });
         }
 
+        // OneBot 联调：查看连接状态 / 发测试消息
+        if (path === '/api/onebot/status' && method === 'GET') {
+          const id = env.ONEBOT_BRIDGE.idFromName('onebot');
+          const stub = env.ONEBOT_BRIDGE.get(id);
+          const st = await stub.fetch(new Request('http://onebot/status')).then(r => r.json());
+          return json({ ok: true, data: st });
+        }
+        if (path === '/api/onebot/test' && method === 'POST') {
+          const body = await request.json().catch(() => ({}));
+          const qq = String(body.qq || '').trim();
+          if (!qq) return json({ error: '缺少 qq' }, 400);
+          const content = body.content || '这是一条来自师生预约系统的测试消息';
+          const groupId = body.groupId || env.NOTIFY_GROUP_ID;
+          const id = env.ONEBOT_BRIDGE.idFromName('onebot');
+          const stub = env.ONEBOT_BRIDGE.get(id);
+          const r1 = await stub.fetch(new Request('http://onebot/send', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: 'send_private_msg',
+              params: { user_id: Number(qq), group_id: Number(groupId), message: content, auto_escape: false }
+            })
+          })).then(r => r.json());
+          if (r1.ok) return json({ ok: true, data: { channel: 'temporary', ...r1 } });
+          const r2 = await stub.fetch(new Request('http://onebot/send', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: 'send_group_msg',
+              params: { group_id: Number(groupId), message: `[CQ:at,qq=${qq}] ${content}` }
+            })
+          })).then(r => r.json());
+          return json({ ok: !!r2.ok, data: { channel: r2.ok ? 'at' : 'failed', first: r1, second: r2 } });
+        }
+
         return json({ error: '接口不存在' }, 404);
       } catch (e) {
         console.error('API error:', e);

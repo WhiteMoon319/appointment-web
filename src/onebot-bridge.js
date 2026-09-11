@@ -43,6 +43,11 @@ export class OneBotBridge {
       return Response.json(result);
     }
 
+    // ---- 连接状态查询（联调用）----
+    if (url.pathname === '/status') {
+      return Response.json({ ok: true, connected: this.conns.size > 0, conns: this.conns.size });
+    }
+
     return new Response('OneBotBridge', { status: 200 });
   }
 
