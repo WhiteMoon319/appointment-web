@@ -1,24 +1,10 @@
 /**
- * 定时提醒 Worker 主入口（Cron 每分钟触发）
- * 扫描 status=confirmed 且进入提醒窗口的预约，分别按学生/老师的 remind_minutes 发送 OneBot 通知。
- * 通知逻辑复用 Pages 侧 _notify.js（临时会话优先、群内 at 兜底、去重）。
+ * 定时提醒逻辑：扫描到点预约并发送 OneBot 通知
+ * 供 Worker 的 scheduled 定时触发，也可通过 GET /api/remind 手动调试。
  */
-import { sendNotify, fmtTime } from '../../functions/api/_notify.js';
+import { sendNotify, fmtTime } from '../lib/notify.js';
 
-export default {
-  async scheduled(event, env, ctx) {
-    ctx.waitUntil(runRemind(env));
-  },
-  // 手动触发调试：访问 Worker 根路径
-  async fetch(request, env) {
-    const stats = await runRemind(env);
-    return new Response(JSON.stringify({ ok: true, data: stats }), {
-      headers: { 'Content-Type': 'application/json' }
-    });
-  }
-};
-
-async function runRemind(env) {
+export async function runRemind(env) {
   const now = Date.now();
   const stats = { scanned: 0, sent: 0, skipped: 0 };
 

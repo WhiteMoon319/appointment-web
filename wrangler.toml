@@ -1,0 +1,26 @@
+name = "appointment-worker"
+main = "src/index.js"
+compatibility_date = "2026-06-29"
+compatibility_flags = ["nodejs_compat"]
+
+# 静态资源（public/ 下的 HTML/CSS/JS）
+[assets]
+directory = "./public"
+binding = "ASSETS"
+
+# D1 数据库
+[[d1_databases]]
+binding = "DB"
+database_name = "appointment-db"
+database_id = "REPLACE_WITH_YOUR_D1_ID"
+
+# 定时提醒：每分钟执行
+[triggers]
+crons = ["* * * * *"]
+
+# 业务配置
+[vars]
+TEACHER_INVITE_CODE = "REPLACE_WITH_SECRET"
+NOTIFY_GROUP_ID = "REPLACE_WITH_QQ_GROUP_ID"
+ONEBOT_URL = "https://onebot.example.com"
+ONEBOT_TOKEN = "REPLACE_WITH_ONEBOT_TOKEN"

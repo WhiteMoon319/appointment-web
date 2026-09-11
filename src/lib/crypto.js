@@ -1,6 +1,5 @@
 /**
- * WRPT 密码哈希工具
- * PBKDF2 + SHA-256，10 万次迭代
+ * 密码哈希工具：PBKDF2 + SHA-256，10 万次迭代
  */
 
 async function pbkdf2(password, salt, iterations = 100000, keyLen = 32) {
@@ -17,12 +16,6 @@ async function pbkdf2(password, salt, iterations = 100000, keyLen = 32) {
 
 function toHex(buf) {
   return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
-}
-
-function fromHex(hex) {
-  const bytes = new Uint8Array(hex.length / 2);
-  for (let i = 0; i < hex.length; i += 2) bytes[i / 2] = parseInt(hex.substr(i, 2), 16);
-  return bytes;
 }
 
 export async function createPasswordHash(password) {

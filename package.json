@@ -1,0 +1,14 @@
+{
+  "name": "appointment-worker",
+  "version": "1.0.0",
+  "private": true,
+  "description": "师生预约：Cloudflare Worker 单应用（Pages assets + API + Cron + OneBot 通知）",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "db:init": "wrangler d1 execute appointment-db --remote --file=db_schema.sql"
+  },
+  "devDependencies": {
+    "wrangler": "^4.0.0"
+  }
+}

@@ -1,31 +1,12 @@
 /**
- * /api/appointments
- * GET   列表（学生看自己的 / 老师看名下的，?status= 过滤）
- * POST  { action: 'create'|'confirm'|'reject'|'adjust'|'studentConfirmAdjust'|'cancel' }
+ * /api/appointments  预约状态机
+ * GET  列表（学生看自己的 / 老师看名下的，?status= 过滤）
+ * POST create / confirm / reject / adjust / studentConfirmAdjust / cancel
  */
-import { getAuthUser, requireStudent, json } from '../_auth.js';
-import { sendNotify, fmtTime } from '../_notify.js';
+import { requireStudent, getAuthUser, json, readBody } from '../lib/auth.js';
+import { sendNotify, fmtTime } from '../lib/notify.js';
 
-export async function onRequest(context) {
-  const { request, env } = context;
-  if (request.method === 'GET') return list(request, env);
-  if (request.method !== 'POST') return json({ error: '方法不允许' }, 405);
-
-  const body = await request.json().catch(() => ({}));
-  const action = body.action;
-  switch (action) {
-    case 'create': return create(request, env, body);
-    case 'confirm': return stateChange(request, env, body, 'confirm');
-    case 'reject': return stateChange(request, env, body, 'reject');
-    case 'adjust': return stateChange(request, env, body, 'adjust');
-    case 'studentConfirmAdjust': return stateChange(request, env, body, 'studentConfirmAdjust');
-    case 'cancel': return stateChange(request, env, body, 'cancel');
-    default: return json({ error: '未知操作' }, 400);
-  }
-}
-
-// ---------- 列表 ----------
-async function list(request, env) {
+export async function list(request, env) {
   const user = await getAuthUser(request, env);
   if (!user) return json({ error: '未登录' }, 401);
 
@@ -50,12 +31,12 @@ async function list(request, env) {
   return json({ ok: true, data: { list: res.results || [] } });
 }
 
-// ---------- 创建（学生） ----------
-async function create(request, env, body) {
+export async function create(request, env) {
   const auth = await requireStudent(request, env);
   if (auth.error) return json({ error: auth.error }, auth.status);
   const student = auth.user;
 
+  const body = await readBody(request);
   const teacherId = Number(body.teacherId);
   const startTime = Number(body.startTime);
   if (!teacherId) return json({ error: '请选择老师' }, 400);
@@ -91,11 +72,11 @@ async function create(request, env, body) {
   return json({ ok: true, data: { id: appointmentId, status: 'pending' } });
 }
 
-// ---------- 状态流转 ----------
-async function stateChange(request, env, body, action) {
+export async function stateChange(request, env, action) {
   const user = await getAuthUser(request, env);
   if (!user) return json({ error: '未登录' }, 401);
 
+  const body = await readBody(request);
   const id = Number(body.appointmentId);
   if (!id) return json({ error: '预约 ID 缺失' }, 400);
   const appt = await env.DB.prepare('SELECT * FROM appointments WHERE id = ?').bind(id).first();
@@ -109,7 +90,6 @@ async function stateChange(request, env, body, action) {
       if (user.role !== 'teacher' || appt.teacher_id !== user.id) return json({ error: '无权操作' }, 403);
       if (s !== 'pending') return json({ error: '当前状态不可确认' }, 409);
       await env.DB.prepare("UPDATE appointments SET status='confirmed', updated_at=? WHERE id=?").bind(now, id).run();
-      // 通知学生：已确认
       await sendNotify(env, {
         qq: appt.student_qq,
         content: `与${appt.teacher_name}：预约已确认（${fmtTime(appt.start_time)}）`

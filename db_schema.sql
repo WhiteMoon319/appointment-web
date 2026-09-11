@@ -1,5 +1,5 @@
 -- 师生预约系统 D1 建表脚本
--- 执行：wrangler d1 execute appointment-db --remote --file=functions/_private/db_schema.sql
+-- 执行：npx wrangler d1 execute appointment-db --remote --file=db_schema.sql
 
 CREATE TABLE IF NOT EXISTS users (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
