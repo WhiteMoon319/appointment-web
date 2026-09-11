@@ -4,45 +4,55 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>老师端 - 师生预约</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
-  <div class="topbar">
+  <div class="header">
     <span class="app-name">老师端</span>
-    <a href="#" id="logout">退出登录</a>
+    <a href="#" class="logout" id="logout">退出登录</a>
   </div>
 
   <div class="container">
     <!-- 名单管理 -->
     <div class="card">
-      <div class="row-between">
-        <h2 style="margin:0">名单管理</h2>
-        <button class="btn-sm btn-plain" id="btnRefreshRoster" style="margin:0">刷新</button>
+      <div class="row-between" style="display:flex;align-items:center;justify-content:space-between">
+        <h2 class="card-title" style="margin:0">名单管理</h2>
+        <button class="btn btn-sm" id="btnRefreshRoster" style="margin:0">刷新</button>
       </div>
       <label>批量导入（每行：学号,姓名）</label>
       <textarea id="rosterBatch" placeholder="20250001,张三&#10;20250002,李四"></textarea>
-      <button class="btn-primary" id="btnImport">导入名单</button>
-      <div id="rosterList" style="margin-top:14px"></div>
+      <button class="btn btn-primary btn-block" id="btnImport">导入名单</button>
+      <div class="table-wrap">
+        <div class="table-scroll">
+          <table class="table">
+            <thead>
+              <tr><th>学号</th><th>姓名</th></tr>
+            </thead>
+            <tbody id="rosterBody"></tbody>
+          </table>
+        </div>
+      </div>
     </div>
 
     <!-- 预约管理 -->
     <div class="card">
-      <div class="row-between">
-        <h2 style="margin:0">预约管理</h2>
-        <button class="btn-sm btn-plain" id="btnRefreshAppt" style="margin:0">刷新</button>
+      <div class="row-between" style="display:flex;align-items:center;justify-content:space-between">
+        <h2 class="card-title" style="margin:0">预约管理</h2>
+        <button class="btn btn-sm" id="btnRefreshAppt" style="margin:0">刷新</button>
       </div>
-      <div class="tab-row" id="statusTabs" style="margin-top:12px">
-        <div class="tab active" data-s="">全部</div>
-        <div class="tab" data-s="pending">待确认</div>
-        <div class="tab" data-s="confirmed">已确认</div>
-        <div class="tab" data-s="adjust_pending">调整中</div>
+      <div class="tabs" id="statusTabs" style="margin-top:12px">
+        <button class="active" data-s="">全部</button>
+        <button data-s="pending">待确认</button>
+        <button data-s="confirmed">已确认</button>
+        <button data-s="adjust_pending">调整中</button>
       </div>
       <div id="apptList"></div>
     </div>
 
     <!-- 设置 -->
     <div class="card">
-      <h2>提醒设置</h2>
+      <h2 class="card-title">提醒设置</h2>
       <label>提前多久提醒</label>
       <select id="remindSelect">
         <option value="0">不提醒</option>
@@ -52,7 +62,7 @@
         <option value="60">提前 1 小时</option>
         <option value="1440">提前 1 天</option>
       </select>
-      <button class="btn-primary" id="btnSaveRemind">保存设置</button>
+      <button class="btn btn-primary btn-block" id="btnSaveRemind">保存设置</button>
     </div>
   </div>
 
@@ -60,9 +70,9 @@
   <script>
     const $ = id => document.getElementById(id);
     const STATUS = {
-      pending: ['待确认', 'tag-pending'], confirmed: ['已确认', 'tag-confirmed'],
-      rejected: ['已拒绝', 'tag-rejected'], cancelled: ['已取消', 'tag-cancelled'],
-      adjust_pending: ['待学生确认调整', 'tag-adjust'], completed: ['已完成', 'tag-completed']
+      pending: ['待确认', 'badge-pending'], confirmed: ['已确认', 'badge-confirmed'],
+      rejected: ['已拒绝', 'badge-rejected'], cancelled: ['已取消', 'badge-cancelled'],
+      adjust_pending: ['待确认调整', 'badge-adjust_pending'], completed: ['已完成', 'badge-completed']
     };
     const fmt = ts => {
       const d = new Date(ts);
@@ -75,10 +85,12 @@
       try {
         const data = await API.get('/api/roster/list');
         const list = data.list || [];
-        $('rosterList').innerHTML = list.length
-          ? list.map(r => `<div class="appt-meta">${r.student_id}　${r.name}</div>`).join('')
-          : '<div class="empty">名单为空，请先导入</div>';
-      } catch (e) { $('rosterList').innerHTML = `<div class="note note-danger">${e.message}</div>`; }
+        $('rosterBody').innerHTML = list.length
+          ? list.map(r => `<tr><td class="code">${r.student_id}</td><td>${r.name}</td></tr>`).join('')
+          : '<tr><td colspan="2" class="empty">名单为空，请先导入</td></tr>';
+      } catch (e) {
+        $('rosterBody').innerHTML = `<tr><td colspan="2" class="note note-danger">${e.message}</td></tr>`;
+      }
     }
 
     async function loadAppointments() {
@@ -90,23 +102,23 @@
         return;
       }
       $('apptList').innerHTML = list.map(a => {
-        const [text, cls] = STATUS[a.status] || [a.status, 'tag-cancelled'];
-        return `<div class="card" style="margin-bottom:12px">
-          <div class="row-between">
+        const [text, cls] = STATUS[a.status] || [a.status, 'badge-cancelled'];
+        return `<div class="appt">
+          <div class="appt-head">
             <span class="appt-time">${fmt(a.start_time)}</span>
-            <span class="tag ${cls}">${text}</span>
+            <span class="badge ${cls}">${text}</span>
           </div>
-          <div class="appt-meta">学生：${a.student_name}（${a.student_qq}）</div>
+          <div class="appt-meta">学生：${a.student_name}（<span class="code">${a.student_qq}</span>）</div>
           ${a.reject_reason ? `<div class="note note-danger">拒绝原因：${a.reject_reason}</div>` : ''}
           ${a.teacher_adjusted ? '<div class="note note-warn">已调整时间，等待学生确认</div>' : ''}
           ${a.status === 'pending' ? `
-            <div class="btn-row">
-              <button class="btn-sm btn-primary" onclick="confirmAppt(${a.id})">确认</button>
-              <button class="btn-sm btn-danger" onclick="rejectAppt(${a.id})">拒绝</button>
+            <div class="appt-actions">
+              <button class="btn btn-sm btn-primary" onclick="confirmAppt(${a.id})">确认</button>
+              <button class="btn btn-sm btn-danger" onclick="rejectAppt(${a.id})">拒绝</button>
             </div>` : ''}
           ${a.status === 'confirmed' ? `
-            <div class="btn-row">
-              <button class="btn-sm btn-plain" onclick="adjustAppt(${a.id})">调整时间</button>
+            <div class="appt-actions">
+              <button class="btn btn-sm" onclick="adjustAppt(${a.id})">调整时间</button>
             </div>` : ''}
         </div>`;
       }).join('');
@@ -155,9 +167,9 @@
       } catch (e) { alert(e.message); }
     });
 
-    document.querySelectorAll('#statusTabs .tab').forEach(tab => {
+    document.querySelectorAll('#statusTabs button').forEach(tab => {
       tab.addEventListener('click', () => {
-        document.querySelectorAll('#statusTabs .tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('#statusTabs button').forEach(t => t.classList.remove('active'));
         tab.classList.add('active');
         filterStatus = tab.dataset.s;
         loadAppointments();
@@ -181,7 +193,6 @@
       window.location.href = '/';
     });
 
-    // 初始化
     (async () => {
       try {
         const me = await API.get('/api/auth/me');

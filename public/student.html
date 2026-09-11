@@ -4,46 +4,47 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>学生端 - 师生预约</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
-  <div class="topbar">
+  <div class="header">
     <span class="app-name">学生端</span>
-    <a href="#" id="logout">退出登录</a>
+    <a href="#" class="logout" id="logout">退出登录</a>
   </div>
 
   <div class="container">
     <!-- 预约 -->
-    <div class="card" id="bookCard">
-      <h2>预约老师</h2>
+    <div class="card">
+      <h2 class="card-title">预约老师</h2>
       <label>选择老师</label>
       <select id="teacherSelect"></select>
       <label>预约日期</label>
       <input id="bookDate" type="date">
       <label>预约时间</label>
       <input id="bookTime" type="time">
-      <button class="btn-primary" id="btnBook">提交预约</button>
-      <p class="muted" style="margin-top:10px">提交后需老师确认；老师调整时间后你需再次确认。预约确认后到点会通过 QQ 通知提醒。</p>
+      <button class="btn btn-primary btn-block" id="btnBook">提交预约</button>
+      <p class="card-meta" style="margin-top:10px">提交后需老师确认；老师调整时间后你需再次确认。预约确认后到点会通过 QQ 通知提醒。</p>
     </div>
 
     <!-- 我的预约 -->
     <div class="card">
-      <div class="row-between">
-        <h2 style="margin:0">我的预约</h2>
-        <button class="btn-sm btn-plain" id="btnRefresh" style="margin:0">刷新</button>
+      <div class="row-between" style="display:flex;align-items:center;justify-content:space-between">
+        <h2 class="card-title" style="margin:0">我的预约</h2>
+        <button class="btn btn-sm" id="btnRefresh" style="margin:0">刷新</button>
       </div>
-      <div class="tab-row" id="statusTabs" style="margin-top:12px">
-        <div class="tab active" data-s="">全部</div>
-        <div class="tab" data-s="pending">待确认</div>
-        <div class="tab" data-s="confirmed">已确认</div>
-        <div class="tab" data-s="adjust_pending">待确认调整</div>
+      <div class="tabs" id="statusTabs" style="margin-top:12px">
+        <button class="active" data-s="">全部</button>
+        <button data-s="pending">待确认</button>
+        <button data-s="confirmed">已确认</button>
+        <button data-s="adjust_pending">待确认调整</button>
       </div>
       <div id="myList"></div>
     </div>
 
     <!-- 设置 -->
     <div class="card">
-      <h2>提醒设置</h2>
+      <h2 class="card-title">提醒设置</h2>
       <label>提前多久提醒</label>
       <select id="remindSelect">
         <option value="0">不提醒</option>
@@ -53,7 +54,7 @@
         <option value="60">提前 1 小时</option>
         <option value="1440">提前 1 天</option>
       </select>
-      <button class="btn-primary" id="btnSaveRemind">保存设置</button>
+      <button class="btn btn-primary btn-block" id="btnSaveRemind">保存设置</button>
     </div>
   </div>
 
@@ -61,9 +62,9 @@
   <script>
     const $ = id => document.getElementById(id);
     const STATUS = {
-      pending: ['待确认', 'tag-pending'], confirmed: ['已确认', 'tag-confirmed'],
-      rejected: ['已拒绝', 'tag-rejected'], cancelled: ['已取消', 'tag-cancelled'],
-      adjust_pending: ['待学生确认调整', 'tag-adjust'], completed: ['已完成', 'tag-completed']
+      pending: ['待确认', 'badge-pending'], confirmed: ['已确认', 'badge-confirmed'],
+      rejected: ['已拒绝', 'badge-rejected'], cancelled: ['已取消', 'badge-cancelled'],
+      adjust_pending: ['待确认调整', 'badge-adjust_pending'], completed: ['已完成', 'badge-completed']
     };
     const fmt = ts => {
       const d = new Date(ts);
@@ -87,23 +88,23 @@
         return;
       }
       $('myList').innerHTML = list.map(a => {
-        const [text, cls] = STATUS[a.status] || [a.status, 'tag-cancelled'];
-        return `<div class="card" style="margin-bottom:12px">
-          <div class="row-between">
+        const [text, cls] = STATUS[a.status] || [a.status, 'badge-cancelled'];
+        return `<div class="appt">
+          <div class="appt-head">
             <span class="appt-time">${fmt(a.start_time)}</span>
-            <span class="tag ${cls}">${text}</span>
+            <span class="badge ${cls}">${text}</span>
           </div>
           <div class="appt-meta">老师：${a.teacher_name}</div>
           ${a.teacher_adjusted ? '<div class="note note-warn">老师调整了时间，请确认</div>' : ''}
           ${a.reject_reason ? `<div class="note note-danger">拒绝原因：${a.reject_reason}</div>` : ''}
           ${a.status === 'pending' || a.status === 'confirmed' ? `
-            <div class="btn-row">
-              <button class="btn-sm btn-danger" onclick="cancelAppt(${a.id})">取消预约</button>
+            <div class="appt-actions">
+              <button class="btn btn-sm btn-danger" onclick="cancelAppt(${a.id})">取消预约</button>
             </div>` : ''}
           ${a.status === 'adjust_pending' ? `
-            <div class="btn-row">
-              <button class="btn-sm btn-primary" onclick="agreeAdjust(${a.id})">同意新时间</button>
-              <button class="btn-sm btn-danger" onclick="rejectAdjust(${a.id})">不同意，取消</button>
+            <div class="appt-actions">
+              <button class="btn btn-sm btn-primary" onclick="agreeAdjust(${a.id})">同意新时间</button>
+              <button class="btn btn-sm btn-danger" onclick="rejectAdjust(${a.id})">不同意，取消</button>
             </div>` : ''}
         </div>`;
       }).join('');
@@ -146,9 +147,9 @@
       } catch (e) { alert(e.message); }
     });
 
-    document.querySelectorAll('#statusTabs .tab').forEach(tab => {
+    document.querySelectorAll('#statusTabs button').forEach(tab => {
       tab.addEventListener('click', () => {
-        document.querySelectorAll('#statusTabs .tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('#statusTabs button').forEach(t => t.classList.remove('active'));
         tab.classList.add('active');
         filterStatus = tab.dataset.s;
         loadMine();
@@ -157,7 +158,6 @@
 
     $('btnRefresh').addEventListener('click', () => { loadTeachers(); loadMine(); });
 
-    // 设置
     $('btnSaveRemind').addEventListener('click', async () => {
       try {
         await API.post('/api/settings', { remindMinutes: Number($('remindSelect').value) });
@@ -172,7 +172,6 @@
       window.location.href = '/';
     });
 
-    // 初始化
     (async () => {
       try {
         const me = await API.get('/api/auth/me');

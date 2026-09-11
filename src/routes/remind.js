@@ -36,7 +36,7 @@ export async function runRemind(env) {
     if (teacher && inWindow(appt.start_time, teacher.remind_minutes, now)) {
       const r = await sendNotify(env, {
         qq: teacher.qq,
-        content: `学生${appt.student_name}预约 · ${fmtTime(appt.start_time)} 即将开始`
+        content: `${appt.student_name}预约 · ${fmtTime(appt.start_time)} 即将开始`
       }, { appointmentId: appt.id, type: 'remind' });
       (r.status === 'sent' || r.status === 'fallback') ? stats.sent++ : stats.skipped++;
     } else {

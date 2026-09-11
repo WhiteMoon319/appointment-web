@@ -4,17 +4,18 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>登录 - 师生预约</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
   <div class="container">
     <div class="card">
-      <h1>师生预约</h1>
-      <p class="sub">学生实名预约老师时间，到点 QQ 通知提醒</p>
+      <h1 style="font-size:20px;margin-bottom:4px;letter-spacing:-0.02em">师生预约</h1>
+      <p class="card-meta" style="margin-bottom:20px">学生实名预约老师时间，到点 QQ 通知提醒</p>
 
-      <div class="tab-row" id="roleTabs">
-        <div class="tab active" data-role="student">我是学生</div>
-        <div class="tab" data-role="teacher">我是老师</div>
+      <div class="tabs" id="roleTabs">
+        <button class="active" data-role="student">我是学生</button>
+        <button data-role="teacher">我是老师</button>
       </div>
 
       <!-- 登录表单 -->
@@ -23,9 +24,9 @@
         <input id="loginQQ" type="text" placeholder="请输入 QQ 号" autocomplete="username">
         <label>密码</label>
         <input id="loginPwd" type="password" placeholder="请输入密码" autocomplete="current-password">
-        <button class="btn-primary" id="btnLogin">登录</button>
-        <p class="muted" style="margin-top:12px;text-align:center">
-          还没有账号？<a href="#" id="showRegister" style="color:var(--primary)">去注册</a>
+        <button class="btn btn-primary btn-block" id="btnLogin">登录</button>
+        <p class="card-meta" style="text-align:center;margin-top:12px">
+          还没有账号？<a href="#" id="showRegister">去注册</a>
         </p>
       </div>
 
@@ -43,9 +44,9 @@
         </div>
         <label>密码</label>
         <input id="regPwd" type="password" placeholder="至少 6 位">
-        <button class="btn-primary" id="btnRegister">注册</button>
-        <p class="muted" style="margin-top:12px;text-align:center">
-          已有账号？<a href="#" id="showLogin" style="color:var(--primary)">去登录</a>
+        <button class="btn btn-primary btn-block" id="btnRegister">注册</button>
+        <p class="card-meta" style="text-align:center;margin-top:12px">
+          已有账号？<a href="#" id="showLogin">去登录</a>
         </p>
       </div>
     </div>
@@ -57,9 +58,9 @@
     const $ = id => document.getElementById(id);
 
     // 角色切换
-    document.querySelectorAll('#roleTabs .tab').forEach(tab => {
+    document.querySelectorAll('#roleTabs button').forEach(tab => {
       tab.addEventListener('click', () => {
-        document.querySelectorAll('#roleTabs .tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('#roleTabs button').forEach(t => t.classList.remove('active'));
         tab.classList.add('active');
         role = tab.dataset.role;
         $('regLabelStudent').textContent = role === 'student' ? '学号' : '老师姓名';
