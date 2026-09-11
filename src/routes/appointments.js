@@ -31,12 +31,11 @@ export async function list(request, env) {
   return json({ ok: true, data: { list: res.results || [] } });
 }
 
-export async function create(request, env) {
+export async function create(request, env, body) {
   const auth = await requireStudent(request, env);
   if (auth.error) return json({ error: auth.error }, auth.status);
   const student = auth.user;
 
-  const body = await readBody(request);
   const teacherId = Number(body.teacherId);
   const startTime = Number(body.startTime);
   if (!teacherId) return json({ error: '请选择老师' }, 400);
@@ -72,11 +71,10 @@ export async function create(request, env) {
   return json({ ok: true, data: { id: appointmentId, status: 'pending' } });
 }
 
-export async function stateChange(request, env, action) {
+export async function stateChange(request, env, action, body = {}) {
   const user = await getAuthUser(request, env);
   if (!user) return json({ error: '未登录' }, 401);
 
-  const body = await readBody(request);
   const id = Number(body.appointmentId);
   if (!id) return json({ error: '预约 ID 缺失' }, 400);
   const appt = await env.DB.prepare('SELECT * FROM appointments WHERE id = ?').bind(id).first();

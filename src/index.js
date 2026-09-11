@@ -35,8 +35,8 @@ export default {
         if (path === '/api/appointments' && method === 'POST') {
           const body = await request.json().catch(() => ({}));
           const action = body.action;
-          if (action === 'create') return appointments.create(request, env);
-          return appointments.stateChange(request, env, action);
+          if (action === 'create') return appointments.create(request, env, body);
+          return appointments.stateChange(request, env, action, body);
         }
 
         // settings / teachers / remind
