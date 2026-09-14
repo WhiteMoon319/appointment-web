@@ -27,8 +27,7 @@ new_sqlite_classes = ["OneBotBridge"]
 [triggers]
 crons = ["* * * * *"]
 
-# 业务配置
-[vars]
-TEACHER_INVITE_CODE = "REPLACE_WITH_SECRET"
-NOTIFY_GROUP_ID = "REPLACE_WITH_SECRET"
-ONEBOT_TOKEN = "REPLACE_WITH_SECRET"
+# 业务配置（敏感值不放仓库，通过 secret 设置；本地开发放 .dev.vars）
+#   wrangler secret put TEACHER_INVITE_CODE   # 老师注册邀请码
+#   wrangler secret put NOTIFY_GROUP_ID       # 预约通知 QQ 群号
+#   wrangler secret put ONEBOT_TOKEN          # OneBot 连接鉴权 token

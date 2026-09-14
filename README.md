@@ -31,7 +31,7 @@ src/
   lib/             auth（认证）/ crypto（PBKDF2）/ notify（OneBot 发送）
   routes/          auth / roster / appointments / settings / remind
 db_schema.sql      D1 建表脚本
-wrangler.toml      单 Worker 配置（assets + D1 + DO + cron + vars）
+wrangler.toml      单 Worker 配置（assets + D1 + DO + cron）
 ```
 
 ## 部署步骤
@@ -45,13 +45,23 @@ npx wrangler d1 create appointment-db
 npx wrangler d1 execute appointment-db --remote --file=db_schema.sql
 ```
 
-### 2. 配置 wrangler.toml
+### 2. 配置敏感变量（Secrets）
+
+敏感配置不写进仓库，通过 `wrangler secret` 设置：
+
+```bash
+npx wrangler secret put TEACHER_INVITE_CODE   # 老师注册邀请码
+npx wrangler secret put NOTIFY_GROUP_ID       # 预约通知 QQ 群号
+npx wrangler secret put ONEBOT_TOKEN          # OneBot 连接鉴权 token
+```
 
 | 变量 | 说明 |
 |---|---|
-| `TEACHER_INVITE_CODE` | 老师注册邀请码（默认 TEST2026，上线前改） |
+| `TEACHER_INVITE_CODE` | 老师注册邀请码 |
 | `NOTIFY_GROUP_ID` | 预约通知 QQ 群号 |
-| `ONEBOT_TOKEN` | OneBot access_token（连接鉴权，双方一致） |
+| `ONEBOT_TOKEN` | OneBot 连接鉴权 token（与 OneBot 侧一致） |
+
+本地开发：复制 `.dev.vars.example` 为 `.dev.vars` 并填入真实值（已在 .gitignore 中，不会提交）。
 
 ### 3. 部署
 
