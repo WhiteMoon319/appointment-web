@@ -1,118 +1,248 @@
-# 师生预约（Cloudflare Worker 单应用）
+# 师生预约
 
-学生实名（学号+姓名）预约老师时间，老师确认/拒绝/调整，到点通过 **QQ OneBot 反向 WebSocket** 通知（群临时会话优先、失败降级群内 at）。
+一个轻量的师生预约系统：学生实名（学号 + 姓名）预约老师的时间，老师确认 / 拒绝 / 调整，临近预约时间自动通过 **QQ 机器人**提醒双方。
 
-## 架构（单 Worker）
+- **零构建前端**：原生 HTML / CSS / JS，无打包工具
+- **单 Worker 全栈**：静态资源 + API + 定时任务 + WebSocket 都在一个 Cloudflare Worker 里
+- **零安装通知**：QQ 机器人（OneBot 实现）以 WebSocket 客户端主动连入，无需公网入站、无需隧道
+
+---
+
+## 功能
+
+**学生端**
+- 学号 + 姓名实名核验（匹配老师导入的名单）
+- 选择老师、日期、时间提交预约
+- 查看预约状态、取消预约、确认老师调整的时间
+- 设置提前多久提醒（5 分钟 ~ 1 天）
+
+**老师端**
+- 邀请码注册
+- 批量导入学生名单（粘贴「学号,姓名」）
+- 确认 / 拒绝（可填原因）/ 调整预约时间
+- 设置自己的提前提醒时间
+
+**通知**
+- 预约创建、确认、拒绝、调整、取消、临期提醒，均自动推送 QQ 消息
+- 双通道：优先私聊（临时会话），失败自动降级群内 @ 点名
+
+---
+
+## 技术架构
 
 ```
-appointment-worker（一个 Worker 全包）
-  ├─ assets：public/（index.html / student.html / teacher.html / assets/）
-  ├─ fetch：/api/* 路由（身份、名单、预约状态机、设置）
-  ├─ /ws  ：OneBot 反向 WebSocket 连接入口（Durable Object 持有连接）
-  └─ scheduled：Cron 每分钟扫描到点预约 → 经 DO 向 OneBot 发 API 调用帧
-
-D1（appointment-db）：users / roster / appointments / notifications
-OneBot（本地 NapCat 系）：作为 WS 客户端主动连接，零安装、无需公网入站
+┌─────────────────────────────────────────────────────────┐
+│  Cloudflare Worker（单应用）                              │
+│                                                          │
+│  assets ──► public/（登录页 / 学生端 / 老师端）            │
+│  fetch  ──► /api/* 路由（身份 · 名单 · 预约 · 设置）        │
+│  /ws    ──► Durable Object 持有 OneBot 反向 WebSocket      │
+│  cron   ──► 每分钟扫描到点预约 → 发提醒                     │
+└───────────────┬─────────────────────────┬───────────────┘
+                │ D1                        │ WebSocket
+                ▼                           ▼
+      users / roster /            OneBot（NapCat 系，本地）
+      appointments / notifications      │
+                                        ▼
+                                     QQ 群 / 私聊
 ```
 
-## 反向 WS 连接原理
+| 层 | 选型 | 说明 |
+|---|---|---|
+| 前端 | 原生 HTML/CSS/JS | 复用班务平台设计系统（Vercel 式层级 + Linear 状态点 + 半透明导航） |
+| 后端 | Cloudflare Workers | 单 Worker 承载 assets / API / Cron / DO |
+| 数据库 | Cloudflare D1 | SQLite，4 张表 |
+| 连接 | Durable Objects | 持有 OneBot 反向 WS 长连接 |
+| 通知 | OneBot v11 | 本地 NapCat / SnowLuma 等实现，主动连入 Worker |
 
-OneBot 侧**不需要安装任何东西**：配置「WebSocket 客户端」连接 `wss://你的域名/ws?access_token=TOKEN`，
-OneBot 主动出站连入 Worker 的 Durable Object（OneBotBridge），Worker 通过该连接发送 OneBot 11 API 调用帧。
-临时隧道（cloudflared）方案已废弃。
+---
+
+## 核心机制
+
+### 预约状态机
+
+```
+pending（学生提交）
+  ├─ 老师确认 ──► confirmed
+  ├─ 老师拒绝 ──► rejected
+  └─ 学生取消 ──► cancelled
+confirmed
+  ├─ 老师调整时间 ──► adjust_pending
+  │     ├─ 学生同意 ──► confirmed
+  │     └─ 学生拒绝 ──► cancelled
+  └─ 时间到达 ──► completed
+```
+
+### 通知通道
+
+系统采用**双通道**，保证通知可靠送达：
+
+1. **私聊（临时会话）**：`send_private_msg` 携带 `group_id` 发起临时会话
+2. **群内 @ 兜底**：私聊失败时自动降级为 `send_group_msg` + `[CQ:at,qq=xxx]`
+
+> **重要**：QQ 的临时会话不是机器人能单方面发起的——**必须先由对方主动给机器人发过一条消息**，会话关系才建立。
+> 因此若希望收到私聊通知，用户需先在群内找到机器人，对其发起临时会话（随便发一条消息）。
+> 否则通知会走群内 @ 通道（机器人无需加好友即可 @ 群成员）。
+
+通知内容去重（`notifications` 表记录 `appointment_id + receiver + type`），同一预约同一类型只发一次。
+
+### 身份与权限
+
+- 学生：注册时校验「学号 + 姓名」是否在老师导入的名单中
+- 老师：注册时校验邀请码
+- 登录发放随机 token，请求头 `Authorization: Bearer <token>`
+- 所有业务操作在服务端校验归属（学生只能动自己的预约，老师只能处理自己名下的预约）
+
+---
+
+## 数据模型
+
+| 表 | 关键字段 | 说明 |
+|---|---|---|
+| `users` | role / name / student_id / qq / password_hash / remind_minutes / token | 学生与老师共用 |
+| `roster` | student_id (unique) / name | 老师导入的名单，学生核验匹配源 |
+| `appointments` | student_id / teacher_id / start_time / status / teacher_adjusted / reject_reason | 预约主表 |
+| `notifications` | appointment_id / receiver_qq / type / channel / status | 通知发送记录（去重 + 审计） |
+
+完整建表语句见 [`db_schema.sql`](./db_schema.sql)。
+
+---
 
 ## 项目结构
 
 ```
-public/            静态页面（登录/注册、学生端、老师端）
+public/                    静态页面
+  index.html                 登录 / 注册
+  student.html               学生端
+  teacher.html               老师端
+  assets/css/style.css       设计系统（令牌 + 组件）
+  assets/js/api.js           前端 API 封装
 src/
-  index.js         Worker 入口：路由分发 + /ws 入口 + 定时触发
-  onebot-bridge.js Durable Object：持有反向 WS 连接，OneBot 11 调用帧收发
-  lib/             auth（认证）/ crypto（PBKDF2）/ notify（OneBot 发送）
-  routes/          auth / roster / appointments / settings / remind
-db_schema.sql      D1 建表脚本
-wrangler.toml      单 Worker 配置（assets + D1 + DO + cron）
+  index.js                   Worker 入口：路由分发 + /ws + cron
+  onebot-bridge.js           Durable Object：OneBot 反向 WS 连接
+  lib/auth.js                认证助手
+  lib/crypto.js              PBKDF2 密码哈希
+  lib/notify.js              通知发送（双通道 + 去重）
+  routes/                    业务路由（auth / roster / appointments / settings / remind）
+db_schema.sql               D1 建表脚本
+wrangler.toml               Worker 配置
+.dev.vars.example           本地环境变量模板
 ```
 
-## 部署步骤
+---
 
-### 1. 创建 D1 数据库并建表
+## 部署
+
+### 前置
+
+- Cloudflare 账号（Workers + D1 权限）
+- 一个 QQ 机器人（OneBot v11 实现：NapCat / SnowLuma / LLOneBot 等）
+- 一个用于通知的 QQ 群
+
+### 1. 创建 D1 数据库
 
 ```bash
-cd appointment-web
 npx wrangler d1 create appointment-db
-# 把输出的 database_id 填入 wrangler.toml
+# 将输出的 database_id 填入 wrangler.toml
 npx wrangler d1 execute appointment-db --remote --file=db_schema.sql
 ```
 
-### 2. 配置敏感变量（Secrets）
+> 若 `--file` 方式超时，可改用 `--command="<SQL>"` 分批执行。
 
-敏感配置不写进仓库，通过 `wrangler secret` 设置：
+### 2. 配置敏感变量（Secrets）
 
 ```bash
 npx wrangler secret put TEACHER_INVITE_CODE   # 老师注册邀请码
-npx wrangler secret put NOTIFY_GROUP_ID       # 预约通知 QQ 群号
+npx wrangler secret put NOTIFY_GROUP_ID       # 通知 QQ 群号
 npx wrangler secret put ONEBOT_TOKEN          # OneBot 连接鉴权 token
 ```
 
 | 变量 | 说明 |
 |---|---|
 | `TEACHER_INVITE_CODE` | 老师注册邀请码 |
-| `NOTIFY_GROUP_ID` | 预约通知 QQ 群号 |
-| `ONEBOT_TOKEN` | OneBot 连接鉴权 token（与 OneBot 侧一致） |
+| `NOTIFY_GROUP_ID` | 通知 QQ 群号 |
+| `ONEBOT_TOKEN` | OneBot 连接鉴权 token（与 OneBot 侧填的一致） |
 
-本地开发：复制 `.dev.vars.example` 为 `.dev.vars` 并填入真实值（已在 .gitignore 中，不会提交）。
-
-### 3. 部署
+### 3. 部署 Worker
 
 ```bash
 npx wrangler deploy
-# Cron 触发器每分钟执行；DO 迁移自动应用
-# 部署后 Worker 域名形如 https://appointment-worker.你的子域.workers.dev
 ```
 
-### 4. 配置 OneBot（反向 WS 客户端，零安装）
+> 由于 `workers.dev` 域名在国内多数网络不可达，建议在 Cloudflare 中绑定一个自定义域名。
 
-在 OneBot 的 WebSocket 客户端设置中填写：
-- 连接地址：`ws(s)://你的worker域名/ws?access_token=LOCAL_DEV_TOKEN`（生产换成真实 token）
-- 协议：OneBot 11（API 调用帧 + echo 响应）
+### 4. 配置 QQ 机器人
 
-OneBot 会自动连接并在断线后重连，Worker 侧通过 DO 持有连接收发消息。
+在机器人的「WebSocket 客户端」设置中填入：
 
-## API 一览
+```
+wss://你的域名/ws?access_token=<ONEBOT_TOKEN>
+```
+
+- 协议选 **OneBot v11 / Universal**
+- 必须是 `wss://`（HTTPS 域名不能用 `ws://`）
+- 机器人会自动连接并在断线后重连
+
+---
+
+## API
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
-| POST | /api/auth/register | 学生（QQ+学号+姓名+密码，匹配名单）/ 老师（QQ+邀请码+姓名+密码） |
-| POST | /api/auth/login | QQ+密码 → token |
-| GET | /api/auth/me | 当前用户 |
-| POST | /api/auth/logout | 退出登录 |
-| GET | /api/roster/list | 名单列表（老师） |
-| POST | /api/roster/import | 批量导入（老师，每行：学号,姓名） |
-| POST | /api/roster/add | 手动添加一条（老师） |
-| GET | /api/teachers | 老师列表（学生选） |
-| GET | /api/appointments | 预约列表（学生/老师视角，?status= 过滤） |
-| POST | /api/appointments | action: create / confirm / reject / adjust / studentConfirmAdjust / cancel |
-| POST | /api/settings | { remindMinutes } 提醒设置 |
-| GET | /api/remind | 手动触发提醒（调试） |
+| POST | `/api/auth/register` | 注册（学生：qq+name+studentId+password；老师：qq+name+inviteCode+password） |
+| POST | `/api/auth/login` | 登录 → token |
+| GET | `/api/auth/me` | 当前用户 |
+| POST | `/api/auth/logout` | 退出登录 |
+| GET | `/api/roster/list` | 名单列表（老师） |
+| POST | `/api/roster/import` | 批量导入 `{ items: [{studentId, name}] }`（老师） |
+| POST | `/api/roster/add` | 添加单条（老师） |
+| GET | `/api/teachers` | 老师列表（学生选老师用） |
+| GET | `/api/appointments` | 预约列表（学生/老师视角，`?status=` 过滤） |
+| POST | `/api/appointments` | `{ action: create \| confirm \| reject \| adjust \| studentConfirmAdjust \| cancel, ... }` |
+| POST | `/api/settings` | `{ remindMinutes }` 提醒设置 |
+| GET | `/api/remind` | 手动触发提醒（调试） |
+| GET | `/api/onebot/status` | OneBot 连接状态 |
+| POST | `/api/onebot/call` | 调用任意 OneBot action（调试） |
 
-## 体验流程
+写操作需带请求头 `X-Requested-By: APPT`，认证请求需带 `Authorization: Bearer <token>`。
 
-1. 老师注册（邀请码+QQ+姓名）→ 名单管理导入学生学号姓名
-2. 学生注册（QQ+学号+姓名，须在名单中）→ 预约选老师和时间
-3. 老师确认/拒绝/调整 → 学生端看到状态、确认调整
-4. 到点前，学生和老师各自按设置的提前时间收到 QQ 临时会话通知
-5. 学生/老师未开启「允许群临时会话」时，自动降级为群内 at
+---
 
-## 安全说明
+## 本地开发
 
-- 数据库：D1 绑定仅服务端可用，前端不直连
-- 认证：注册设密码，登录发随机 token，请求带 `Authorization: Bearer`
-- OneBot 连接：`/ws` 要求 access_token（URL 参数或 Authorization 头），防止他人占用连接
-- 生产前改掉默认邀请码 `TEST2026` 与本地 token `LOCAL_DEV_TOKEN`
+```bash
+# 1. 准备本地环境变量
+cp .dev.vars.example .dev.vars    # 填入真实值
+
+# 2. 初始化本地 D1
+npx wrangler d1 execute appointment-db --local --file=db_schema.sql
+
+# 3. 启动
+npx wrangler dev --local
+```
+
+本地调试定时任务：
+
+```bash
+curl "http://127.0.0.1:8787/cdn-cgi/handler/scheduled"
+```
+
+---
+
+## 安全
+
+- 密码使用 PBKDF2-SHA256（10 万次迭代）哈希存储
+- 敏感配置（邀请码 / 群号 / token）通过 Cloudflare Secrets 管理，不进入仓库
+- D1 仅服务端可访问，前端不直连数据库
+- 写接口校验 `X-Requested-By` 头，`/ws` 校验 access_token
 
 ## 已知边界
 
-- OneBot 为非官方协议，bot 小号存在封号风险，勿用主号，做好风控准备
-- 临时会话依赖对方隐私设置开启；未开启者走群内 at 兜底
-- DO 连接断开或 Worker 休眠时，OneBot 会自动重连（标准 WS 重连机制）
+- OneBot 为非官方协议，机器人账号存在风控/封号风险，建议使用小号
+- 私聊通知依赖对方先发起过临时会话；否则走群内 @ 兜底（群成员可见）
+- 通知依赖机器人常驻在线；机器人离线期间的通知会失败并记录在 `notifications` 表
+- 未实现预约自动归档到 `completed`（当前仅状态机预留）
+
+## License
+
+MIT
