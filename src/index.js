@@ -8,10 +8,20 @@ import * as roster from './routes/roster.js';
 import * as appointments from './routes/appointments.js';
 import * as settings from './routes/settings.js';
 import { runRemind } from './routes/remind.js';
-import { json } from './lib/auth.js';
+import { json, getAuthUser } from './lib/auth.js';
 import { OneBotBridge } from './onebot-bridge.js';
 
 export { OneBotBridge };
+
+const CSRF_HEADER = 'X-Requested-By';
+const CSRF_VALUE = 'APPT';
+
+// 管理端点鉴权：需携带 Authorization: Bearer <ONEBOT_TOKEN>
+function isAdmin(request, env) {
+  const authz = request.headers.get('Authorization') || '';
+  const token = authz.startsWith('Bearer ') ? authz.slice(7) : '';
+  return !!token && !!env.ONEBOT_TOKEN && token === env.ONEBOT_TOKEN;
+}
 
 export default {
   async fetch(request, env, ctx) {
@@ -29,6 +39,11 @@ export default {
     // ---- API 路由 ----
     if (path.startsWith('/api/')) {
       try {
+        // CSRF：非 GET 的写操作需带约定头（前端 api.js 已统一携带）
+        if (method !== 'GET' && request.headers.get(CSRF_HEADER) !== CSRF_VALUE) {
+          return json({ error: 'Forbidden' }, 403);
+        }
+
         // auth
         if (path === '/api/auth/register' && method === 'POST') return auth.register(request, env);
         if (path === '/api/auth/login' && method === 'POST') return auth.login(request, env);
@@ -36,7 +51,7 @@ export default {
         if (path === '/api/auth/logout' && method === 'POST') return auth.logout(request, env);
 
         // roster
-        if (path === '/api/roster/list' && method === 'GET') return roster.list(env);
+        if (path === '/api/roster/list' && method === 'GET') return roster.list(request, env);
         if (path === '/api/roster/import' && method === 'POST') return roster.importBatch(request, env);
         if (path === '/api/roster/add' && method === 'POST') return roster.add(request, env);
 
@@ -49,27 +64,33 @@ export default {
           return appointments.stateChange(request, env, action, body);
         }
 
-        // settings / teachers / remind
+        // settings / teachers
         if (path === '/api/settings' && method === 'POST') return settings.update(request, env);
-        if (path === '/api/teachers' && method === 'GET') return settings.teachers(env);
+        if (path === '/api/teachers' && method === 'GET') {
+          const user = await getAuthUser(request, env);
+          if (!user) return json({ error: '未登录' }, 401);
+          return settings.teachers(env);
+        }
+
+        // ---- 以下为管理/调试端点，需 Bearer <ONEBOT_TOKEN> ----
         if (path === '/api/remind' && method === 'GET') {
+          if (!isAdmin(request, env)) return json({ error: '未授权' }, 401);
           const stats = await runRemind(env);
           return json({ ok: true, data: stats });
         }
 
-        // OneBot 联调：通用调用（查看连接状态 / 调任意 action / 发测试消息）
         if (path === '/api/onebot/status' && method === 'GET') {
-          const id = env.ONEBOT_BRIDGE.idFromName('onebot');
-          const stub = env.ONEBOT_BRIDGE.get(id);
+          if (!isAdmin(request, env)) return json({ error: '未授权' }, 401);
+          const stub = env.ONEBOT_BRIDGE.get(env.ONEBOT_BRIDGE.idFromName('onebot'));
           const st = await stub.fetch(new Request('http://onebot/status')).then(r => r.json());
           return json({ ok: true, data: st });
         }
+
         if (path === '/api/onebot/call' && method === 'POST') {
-          // { action, params } 透传给 OneBot（联调/调试用）
+          if (!isAdmin(request, env)) return json({ error: '未授权' }, 401);
           const body = await request.json().catch(() => ({}));
           if (!body.action) return json({ error: '缺少 action' }, 400);
-          const id = env.ONEBOT_BRIDGE.idFromName('onebot');
-          const stub = env.ONEBOT_BRIDGE.get(id);
+          const stub = env.ONEBOT_BRIDGE.get(env.ONEBOT_BRIDGE.idFromName('onebot'));
           const r = await stub.fetch(new Request('http://onebot/send', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -77,14 +98,15 @@ export default {
           })).then(r => r.json());
           return json({ ok: !!r.ok, data: r });
         }
+
         if (path === '/api/onebot/test' && method === 'POST') {
+          if (!isAdmin(request, env)) return json({ error: '未授权' }, 401);
           const body = await request.json().catch(() => ({}));
           const qq = String(body.qq || '').trim();
           if (!qq) return json({ error: '缺少 qq' }, 400);
           const content = body.content || '这是一条来自师生预约系统的测试消息';
           const groupId = body.groupId || env.NOTIFY_GROUP_ID;
-          const id = env.ONEBOT_BRIDGE.idFromName('onebot');
-          const stub = env.ONEBOT_BRIDGE.get(id);
+          const stub = env.ONEBOT_BRIDGE.get(env.ONEBOT_BRIDGE.idFromName('onebot'));
           const r1 = await stub.fetch(new Request('http://onebot/send', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },

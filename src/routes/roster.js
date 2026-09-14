@@ -6,7 +6,9 @@
  */
 import { requireTeacher, json, readBody } from '../lib/auth.js';
 
-export async function list(env) {
+export async function list(request, env) {
+  const authz = await requireTeacher(request, env);
+  if (authz.error) return json({ error: authz.error }, authz.status);
   const list = await env.DB.prepare('SELECT id, student_id, name, created_at FROM roster ORDER BY student_id').all();
   return json({ ok: true, data: { list: list.results || [] } });
 }

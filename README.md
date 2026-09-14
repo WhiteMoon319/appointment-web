@@ -200,11 +200,11 @@ wss://你的域名/ws?access_token=<ONEBOT_TOKEN>
 | GET | `/api/appointments` | 预约列表（学生/老师视角，`?status=` 过滤） |
 | POST | `/api/appointments` | `{ action: create \| confirm \| reject \| adjust \| studentConfirmAdjust \| cancel, ... }` |
 | POST | `/api/settings` | `{ remindMinutes }` 提醒设置 |
-| GET | `/api/remind` | 手动触发提醒（调试） |
-| GET | `/api/onebot/status` | OneBot 连接状态 |
-| POST | `/api/onebot/call` | 调用任意 OneBot action（调试） |
+| GET | `/api/remind` | 手动触发提醒（管理，需 Bearer token） |
+| GET | `/api/onebot/status` | OneBot 连接状态（管理，需 Bearer token） |
+| POST | `/api/onebot/call` | 调用任意 OneBot action（管理，需 Bearer token） |
 
-写操作需带请求头 `X-Requested-By: APPT`，认证请求需带 `Authorization: Bearer <token>`。
+鉴权约定：写操作需带请求头 `X-Requested-By: APPT`；需登录的接口带 `Authorization: Bearer <用户 token>`；管理端点带 `Authorization: Bearer <ONEBOT_TOKEN>`。
 
 ---
 
@@ -234,7 +234,10 @@ curl "http://127.0.0.1:8787/cdn-cgi/handler/scheduled"
 - 密码使用 PBKDF2-SHA256（10 万次迭代）哈希存储
 - 敏感配置（邀请码 / 群号 / token）通过 Cloudflare Secrets 管理，不进入仓库
 - D1 仅服务端可访问，前端不直连数据库
-- 写接口校验 `X-Requested-By` 头，`/ws` 校验 access_token
+- 认证：登录发放随机 token，请求带 `Authorization: Bearer <token>`
+- CSRF：所有非 GET 的 `/api/*` 写操作需带请求头 `X-Requested-By: APPT`
+- 业务鉴权：名单、预约等接口在服务端校验归属（学生只能操作自己的预约，老师只能操作名下的）
+- **管理端点**（`/api/onebot/*`、`/api/remind`）需 `Authorization: Bearer <ONEBOT_TOKEN>`，普通用户不可调用
 
 ## 已知边界
 
